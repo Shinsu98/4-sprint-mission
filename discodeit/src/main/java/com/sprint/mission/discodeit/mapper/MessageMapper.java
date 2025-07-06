@@ -1,6 +1,6 @@
 package com.sprint.mission.discodeit.mapper;
 
-import com.sprint.mission.discodeit.dto.BinaryContentDto;
+import com.sprint.mission.discodeit.dto.BinaryContentDto.BinaryContentResponseDto;
 import com.sprint.mission.discodeit.dto.MessageCreateDto;
 import com.sprint.mission.discodeit.dto.MessageResponseDto;
 import com.sprint.mission.discodeit.entity.Message;
@@ -33,7 +33,7 @@ public class MessageMapper {
         );
     }
 
-    public static MessageResponseDto entityToDto (Message message, List<BinaryContentDto> attachments) {
+    public static MessageResponseDto entityToDto (Message message, List<BinaryContentResponseDto> attachments) {
         return new MessageResponseDto(
                 message.getId(),
                 message.getAuthorId(),

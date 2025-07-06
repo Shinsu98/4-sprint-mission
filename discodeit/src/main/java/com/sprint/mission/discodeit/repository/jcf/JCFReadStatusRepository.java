@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 
 public class JCFReadStatusRepository implements ReadStatusRepository {
     private static final JCFReadStatusRepository instance = new JCFReadStatusRepository();
-    private final Map<UUID, ReadStatus> data;
+    private final Map<UUID, Map<UUID, ReadStatus>> data;
 
     private JCFReadStatusRepository() {
         this.data = new HashMap<>();
@@ -16,47 +16,63 @@ public class JCFReadStatusRepository implements ReadStatusRepository {
 
     @Override
     public ReadStatus save(ReadStatus readStatus) {
-        data.put(readStatus.getId(), readStatus);
+        data.computeIfAbsent(readStatus.getChannelId(), k -> new HashMap<>())
+                .put(readStatus.getUserId(), readStatus);
+
         return readStatus;
     }
 
-    @Override
-    public Optional<ReadStatus> findById(UUID id) {
-        return Optional.ofNullable(data.get(id));
+    public Optional<ReadStatus> findByChannelIdAndUserId(UUID channelId, UUID userId) {
+        Map<UUID, ReadStatus> userMap = data.get(channelId);
+        if (userMap == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(userMap.get(userId));
     }
 
     @Override
     public List<ReadStatus> findAllByUserId(UUID userId) {
         return data.values().stream()
-                .filter(rs -> rs.getUserId().equals(userId))
+                .map(channelMap -> channelMap.get(userId))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
     @Override
     public List<ReadStatus> findAllByChannelId(UUID channelId) {
-        return data.values().stream()
-                .filter(rs -> rs.getChannelId().equals(channelId))
-                .collect(Collectors.toList());
+        return new ArrayList<>(
+                Optional.ofNullable(data.get(channelId))
+                        .map(Map::values)
+                        .orElse(Collections.emptyList())
+        );
+
     }
 
     @Override
-    public boolean existsById(UUID id) {
-        return data.containsKey(id);
+    public boolean existsById(UUID userId, UUID channelId) {
+        return data.containsKey(userId);
     }
 
     @Override
-    public void deleteById(UUID id) {
-        data.remove(id);
+    public void deleteByChannelIdAndUserId(UUID channelId, UUID userId) {
+        Optional.ofNullable(data.get(channelId)).ifPresent(map -> {
+            map.remove(userId);
+            if (map.isEmpty()) data.remove(channelId);
+        });
     }
 
     @Override
     public void deleteByUserId(UUID userId) {
-        data.values().removeIf(rs -> rs.getUserId().equals(userId));
+        for (Map<UUID, ReadStatus> userMap : data.values()) {
+            userMap.remove(userId);
+        }
+        // 비어 있는 채널 제거
+        data.entrySet().removeIf(entry -> entry.getValue().isEmpty());
     }
 
     @Override
     public void deleteByChannelId(UUID channelId) {
-        data.values().removeIf(rs -> rs.getChannelId().equals(channelId));
+        data.remove(channelId);
     }
 }
 

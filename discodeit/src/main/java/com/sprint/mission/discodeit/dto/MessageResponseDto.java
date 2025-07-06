@@ -2,7 +2,7 @@ package com.sprint.mission.discodeit.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-
+import com.sprint.mission.discodeit.dto.BinaryContentDto.BinaryContentResponseDto;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +14,7 @@ public class MessageResponseDto {
     private UUID authorId;
     private UUID channelId;
     private String content;
-    private List<BinaryContentDto> attachments;
+    private List<BinaryContentResponseDto> attachments;
     private Instant createdAt;
     private Instant updatedAt;
 }

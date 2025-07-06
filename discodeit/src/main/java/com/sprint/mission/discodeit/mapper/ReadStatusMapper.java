@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 public class ReadStatusMapper {
     public static ReadStatusResponseDto entityToDto(ReadStatus readStatus) {
         return new ReadStatusResponseDto(
-                readStatus.getId(),
                 readStatus.getUserId(),
                 readStatus.getChannelId(),
                 readStatus.getReadTime()

@@ -1,6 +1,7 @@
 package com.sprint.mission.discodeit.repository;
 
 import com.sprint.mission.discodeit.entity.Channel;
+import com.sprint.mission.discodeit.entity.ChannelType;
 
 import java.util.List;
 import java.util.Optional;
@@ -11,6 +12,7 @@ public interface ChannelRepository {
     Optional<Channel> findById(UUID id);
     List<Channel> findAll();
     List<Channel> findAllByUserId(UUID userId);
+    List<Channel> findAllByType(ChannelType type);
     boolean existsById(UUID id);
     void deleteById(UUID id);
 }

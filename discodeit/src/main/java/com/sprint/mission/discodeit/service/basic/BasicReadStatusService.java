@@ -1,8 +1,8 @@
 package com.sprint.mission.discodeit.service.basic;
 
 import com.sprint.mission.discodeit.dto.ReadStatusCreateDto;
+import com.sprint.mission.discodeit.dto.ReadStatusDto;
 import com.sprint.mission.discodeit.dto.ReadStatusResponseDto;
-import com.sprint.mission.discodeit.dto.ReadStatusUpdateDto;
 import com.sprint.mission.discodeit.entity.ReadStatus;
 import com.sprint.mission.discodeit.mapper.ReadStatusMapper;
 import com.sprint.mission.discodeit.repository.ChannelRepository;
@@ -10,6 +10,7 @@ import com.sprint.mission.discodeit.repository.ReadStatusRepository;
 import com.sprint.mission.discodeit.repository.UserRepository;
 import com.sprint.mission.discodeit.service.ReadStatusService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -45,39 +46,38 @@ public class BasicReadStatusService implements ReadStatusService {
     }
 
     @Override
-    public ReadStatusResponseDto find(UUID id) {
-        ReadStatus status = getReadStatusOrThrow(id);
+    public ReadStatusResponseDto find(UUID channelId, UUID userId) {
+        ReadStatus status = getReadStatusOrThrow(channelId, userId);
 
         return ReadStatusMapper.entityToDto(status);
     }
 
     @Override
     public List<ReadStatusResponseDto> findAllByUserId(UUID userId) {
-        return readStatusRepository.findAllByUserId(userId).stream()
-                .map(ReadStatusMapper::entityToDto)
-                .collect(Collectors.toList());
+        List<ReadStatus> list = readStatusRepository.findAllByUserId(userId);
+        return list.stream().map(ReadStatusMapper::entityToDto).toList();
     }
 
     @Override
-    public ReadStatusResponseDto update(ReadStatusUpdateDto updateDto) {
-        ReadStatus readStatus = getReadStatusOrThrow(updateDto.getId());
+    public ReadStatusResponseDto update(ReadStatusDto updateDto) {
+        ReadStatus readStatus = getReadStatusOrThrow(updateDto.getChannelId(), updateDto.getUserId());
         readStatus.updateReadTime();
 
         return ReadStatusMapper.entityToDto(readStatusRepository.save(readStatus));
     }
 
     @Override
-    public void delete(UUID id) {
-        if (!readStatusRepository.existsById(id)) {
-            throw new NoSuchElementException("ReadStatus not found : " + id);
+    public void delete(UUID channelId, UUID userId) {
+        if (!readStatusRepository.existsById(channelId, userId)) {
+            throw new NoSuchElementException("ReadStatus not found : channelId=" + channelId + ", userId=" + userId);
         }
 
-        readStatusRepository.deleteById(id);
+        readStatusRepository.deleteByChannelIdAndUserId(channelId, userId);
     }
 
-    private ReadStatus getReadStatusOrThrow(UUID id) {
-        return readStatusRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("ReadStatus not found : " + id));
+    private ReadStatus getReadStatusOrThrow(UUID channelId, UUID userId) {
+        return readStatusRepository.findByChannelIdAndUserId(channelId,userId)
+                .orElseThrow(() -> new NoSuchElementException("ReadStatus not found: channelId=" + channelId + ", userId=" + userId));
     }
 
 }

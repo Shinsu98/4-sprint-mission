@@ -33,13 +33,13 @@ public class FileReadStatusRepository implements ReadStatusRepository {
         return userId + "-" + channelId + EXTENSION;
     }
 
-    private Path resolvePath(UUID id) {
-        return DIRECTORY.resolve(id + EXTENSION);
+    private Path resolvePath(UUID userId, UUID channelId) {
+        return DIRECTORY.resolve(fileName(userId, channelId));
     }
 
     @Override
     public ReadStatus save(ReadStatus readStatus) {
-        Path path = resolvePath(readStatus.getId());
+        Path path = resolvePath(readStatus.getUserId(), readStatus.getChannelId());
         try (FileOutputStream fos = new FileOutputStream(path.toFile());
              ObjectOutputStream oos = new ObjectOutputStream(fos)) {
             oos.writeObject(readStatus);
@@ -50,14 +50,14 @@ public class FileReadStatusRepository implements ReadStatusRepository {
     }
 
     @Override
-    public Optional<ReadStatus> findById(UUID id) {
-        Path path = resolvePath(id);
+    public Optional<ReadStatus> findByChannelIdAndUserId(UUID channelId, UUID userId) {
+        Path path = resolvePath(userId, channelId);
         if (!Files.exists(path)) return Optional.empty();
 
         try (
                 FileInputStream fis = new FileInputStream(path.toFile());
                 ObjectInputStream ois = new ObjectInputStream(fis)
-                ) {
+        ) {
             return Optional.of((ReadStatus) ois.readObject());
         } catch (ClassNotFoundException | IOException e) {
             throw new RuntimeException("Failed to read ReadStatus from file", e);
@@ -68,7 +68,7 @@ public class FileReadStatusRepository implements ReadStatusRepository {
     public List<ReadStatus> findAllByUserId(UUID userId) {
         try {
             List<ReadStatus> findAllUser = Files.list(DIRECTORY)
-                    .filter(path -> path.getFileName().toString().startsWith(userId.toString() + "_"))
+                    .filter(path -> path.getFileName().toString().startsWith(userId.toString() + "-"))
                     .map(path -> {
                         try (FileInputStream fis = new FileInputStream(path.toFile());
                              ObjectInputStream ois = new ObjectInputStream(fis)) {
@@ -89,7 +89,7 @@ public class FileReadStatusRepository implements ReadStatusRepository {
     public List<ReadStatus> findAllByChannelId(UUID channelId) {
         try {
             List<ReadStatus> findAllChannel = Files.list(DIRECTORY)
-                    .filter(path -> path.getFileName().toString().endsWith("_" + channelId + EXTENSION))
+                    .filter(path -> path.getFileName().toString().endsWith("-" + channelId + EXTENSION))
                     .map(path -> {
                         try (FileInputStream fis = new FileInputStream(path.toFile());
                              ObjectInputStream ois = new ObjectInputStream(fis)) {
@@ -107,14 +107,14 @@ public class FileReadStatusRepository implements ReadStatusRepository {
     }
 
     @Override
-    public boolean existsById(UUID id) {
-        Path path = resolvePath(id);
+    public boolean existsById(UUID userId, UUID channelId) {
+        Path path = resolvePath(userId, channelId);
         return Files.exists(path);
     }
 
     @Override
-    public void deleteById(UUID id) {
-        Path path = resolvePath(id);
+    public void deleteByChannelIdAndUserId(UUID channelId, UUID userId) {
+        Path path = resolvePath(userId, channelId);
         try {
             Files.delete(path);
         } catch (IOException e) {
@@ -126,7 +126,7 @@ public class FileReadStatusRepository implements ReadStatusRepository {
     public void deleteByUserId(UUID userId) {
         try {
             Files.list(DIRECTORY)
-                    .filter(path -> path.getFileName().toString().startsWith(userId.toString() + "_"))
+                    .filter(path -> path.getFileName().toString().startsWith(userId.toString() + "-"))
                     .forEach(path -> {
                         try {
                             Files.deleteIfExists(path);
@@ -143,7 +143,7 @@ public class FileReadStatusRepository implements ReadStatusRepository {
     public void deleteByChannelId(UUID channelId) {
         try {
             Files.list(DIRECTORY)
-                    .filter(path -> path.getFileName().toString().endsWith("_" + channelId + EXTENSION))
+                    .filter(path -> path.getFileName().toString().endsWith("-" + channelId + EXTENSION))
                     .forEach(path -> {
                         try {
                             Files.deleteIfExists(path);

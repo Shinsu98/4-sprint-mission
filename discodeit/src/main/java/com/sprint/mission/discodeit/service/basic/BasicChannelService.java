@@ -13,10 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -24,12 +21,13 @@ public class BasicChannelService implements ChannelService {
     private final ChannelRepository channelRepository;
     private final ReadStatusRepository readStatusRepository;
     private final MessageRepository messageRepository;
+    private final ChannelMapper channelMapper;
 
     @Override
     public ChannelResponseDto createPublicChannel(PublicChannelCreateDto dto) {
         Channel channel = new Channel(ChannelType.PUBLIC, dto.getName(), dto.getDescription());
         channelRepository.save(channel);
-        return ChannelMapper.channelToChannelResponseDto(channel, null, null);
+        return channelMapper.channelToChannelResponseDto(channel, null);
     }
 
     @Override
@@ -43,8 +41,8 @@ public class BasicChannelService implements ChannelService {
             readStatusRepository.save(readStatus);
         }
 
-        return ChannelMapper.channelToChannelResponseDto(
-                channel, dto.getParticipantUserIds(), null);
+        return channelMapper.channelToChannelResponseDto(
+                channel, dto.getParticipantUserIds());
     }
 
     @Override
@@ -62,35 +60,35 @@ public class BasicChannelService implements ChannelService {
                     .toList();
         }
 
-        ReadStatusDto readStatusDto = readStatusRepository.findById(userId).map(readStatus -> new ReadStatusDto(readStatus.getUserId(), readStatus.getChannelId(), readStatus.getReadTime()))
+        ReadStatusDto readStatusDto = readStatusRepository.findByChannelIdAndUserId(channelId, userId).map(readStatus -> new ReadStatusDto(readStatus.getUserId(), readStatus.getChannelId()))
                 .orElse(null);
 
-        return ChannelMapper.channelToChannelResponseDto(channel, participants, readStatusDto);
+        return channelMapper.channelToChannelResponseDto(channel, participants);
     }
 
     @Override
     public List<ChannelResponseDto> findAllByUserId(UUID userId) {
-        List<Channel> allByUserId = channelRepository.findAllByUserId(userId);
 
-        return allByUserId.stream().map(channel -> {
-            List<UUID> participantUserIds = null;
-            if (channel.getType() == ChannelType.PRIVATE) {
-                participantUserIds = readStatusRepository.findAllByChannelId(channel.getId())
-                        .stream().map(ReadStatus::getUserId)
-                        .distinct()
-                        .toList();
-            }
+        List<Channel> allChannels = channelRepository.findAll();
 
-            ReadStatusDto readStatusDto = readStatusRepository.findById(userId)
-                    .map(readStatus -> new ReadStatusDto(readStatus.getUserId(), readStatus.getChannelId(), readStatus.getReadTime()))
-                    .orElse(null);
+        List<UUID> privateChannelIds = readStatusRepository.findAllByUserId(userId).stream()
+                .map(ReadStatus::getChannelId)
+                .distinct()
+                .toList();
 
-            return ChannelMapper.channelToChannelResponseDto(
-                    channel,
-                    participantUserIds,
-                    readStatusDto
-            );
-        }).toList();
+        return allChannels.stream()
+                .filter(channel -> channel.getType() == ChannelType.PUBLIC || privateChannelIds.contains(channel.getId()))
+                .map(channel -> {
+                    List<UUID> participantUserIds = channel.getType() == ChannelType.PRIVATE
+                            ? readStatusRepository.findAllByChannelId(channel.getId()).stream()
+                            .map(ReadStatus::getUserId)
+                            .distinct()
+                            .toList()
+                            : Collections.emptyList();
+
+                    return channelMapper.channelToChannelResponseDto(channel, participantUserIds);
+                })
+                .toList();
     }
 
     @Override
@@ -105,7 +103,7 @@ public class BasicChannelService implements ChannelService {
         channel.update(dto.getNewName(), dto.getNewDescription());
         channelRepository.save(channel);
 
-        return ChannelMapper.channelToChannelResponseDto(channel, null, null);
+        return channelMapper.channelToChannelResponseDto(channel, null);
     }
 
     @Override

@@ -1,8 +1,9 @@
 package com.sprint.mission.discodeit.service.basic;
 
-import com.sprint.mission.discodeit.dto.UserCreateDto;
-import com.sprint.mission.discodeit.dto.UserResponseDto;
-import com.sprint.mission.discodeit.dto.UserUpdateDto;
+import com.sprint.mission.discodeit.dto.BinaryContentDto.BinaryContentCreateDto;
+import com.sprint.mission.discodeit.dto.UserDto.UserCreateDto;
+import com.sprint.mission.discodeit.dto.UserDto.UserResponseDto;
+import com.sprint.mission.discodeit.dto.UserDto.UserUpdateDto;
 import com.sprint.mission.discodeit.entity.BinaryContent;
 import com.sprint.mission.discodeit.entity.User;
 import com.sprint.mission.discodeit.entity.UserStatus;
@@ -11,11 +12,15 @@ import com.sprint.mission.discodeit.repository.BinaryContentRepository;
 import com.sprint.mission.discodeit.repository.UserRepository;
 import com.sprint.mission.discodeit.repository.UserStatusRepository;
 import com.sprint.mission.discodeit.service.UserService;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -28,29 +33,40 @@ public class BasicUserService implements UserService {
     private final UserMapper userMapper;
 
     @Override
-    public UserResponseDto create(UserCreateDto userCreateDto) {
-        userRepository.findByUsername(userCreateDto.getUsername())
+    public UserResponseDto create(UserCreateDto dto, @Nullable BinaryContentCreateDto binaryDto) {
+        userRepository.findByUsername(dto.getUsername())
                 .ifPresent(user -> {
                     throw new IllegalArgumentException("Username already exists");
                 });
 
-        userRepository.findByEmail(userCreateDto.getEmail())
+        userRepository.findByEmail(dto.getEmail())
                 .ifPresent(user -> {
                     throw new IllegalArgumentException("Email already exists");
                 });
 
-        User user = userMapper.userCreateDtoToUser(userCreateDto);
+        User user = userMapper.userCreateDtoToUser(dto);
 
-        if (userCreateDto.getProfilePicture() != null) {
-            BinaryContent profile = userMapper.binaryContentDtoToEntity(userCreateDto.getProfilePicture());
-            binaryContentRepository.save(profile);
-            user.setProfileId(profile.getId());
+        if (binaryDto != null) {
+            MultipartFile file = binaryDto.getFile();
+            if (file != null && !file.isEmpty()) {
+                try {
+                    BinaryContent content = new BinaryContent(user.getId(), null,
+                            dto.getProfile().getBytes(),
+                            dto.getProfile().getOriginalFilename(),
+                            dto.getProfile().getContentType());
+                    binaryContentRepository.save(content);
+
+                    user.setProfileId(content.getId());     // User에 연결
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to process profile image", e);
+                }
+            }
         }
+
+        userRepository.save(user);
 
         UserStatus status = new UserStatus(user.getId());
         userStatusRepository.save(status);
-
-        userRepository.save(user);
 
         UserStatus userStatus = userStatusRepository.findByUserId(user.getId()).orElse(null);
         return userMapper.userToUserResponseDto(user, userStatus);

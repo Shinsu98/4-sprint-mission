@@ -9,7 +9,6 @@ import java.util.UUID;
 @AllArgsConstructor
 @Getter
 public class ReadStatusResponseDto {
-    private UUID id;
     private UUID userId;
     private UUID channelId;
     private Instant readTime;

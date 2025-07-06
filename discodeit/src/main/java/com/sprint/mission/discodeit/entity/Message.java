@@ -18,7 +18,7 @@ public class Message implements Serializable {
     private final Instant createdAt;
     private Instant updatedAt;
     private String content;
-    private final List<UUID> attachmentIds; //BinaryContent Id 리스트
+    private List<UUID> attachmentIds; //BinaryContent Id 리스트
 
     public Message(UUID id, UUID authorId, UUID channelId, String content, List<UUID> attachmentIds, Instant createdAt, Instant updatedAt) {
         this.id = id;
@@ -42,15 +42,8 @@ public class Message implements Serializable {
         }
     }
 
-    public void addAttachment(UUID attachmentId) {
-        boolean anyValueUpdated = false;
-        if (attachmentId != null && !attachmentIds.contains(attachmentId)) {
-            this.attachmentIds.add(attachmentId);
-            anyValueUpdated = true;
-        }
-
-        if (anyValueUpdated) {
-            this.updatedAt = Instant.now();
-        }
+    public void updateAttachmentIds(List<UUID> attachmentId) {
+        this.attachmentIds = new ArrayList<>(attachmentId);
+        this.updatedAt = Instant.now();
     }
 }

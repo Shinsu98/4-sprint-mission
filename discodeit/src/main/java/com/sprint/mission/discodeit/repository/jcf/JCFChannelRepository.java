@@ -47,6 +47,13 @@ public class JCFChannelRepository implements ChannelRepository {
     }
 
     @Override
+    public List<Channel> findAllByType(ChannelType type) {
+        return findAll().stream()
+                .filter(channel -> channel.getType() == type)
+                .toList();
+    }
+
+    @Override
     public boolean existsById(UUID id) {
         return this.data.containsKey(id);
     }

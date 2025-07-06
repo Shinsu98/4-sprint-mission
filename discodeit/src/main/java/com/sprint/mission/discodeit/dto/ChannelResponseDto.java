@@ -18,6 +18,5 @@ public class ChannelResponseDto {
     private Instant createdAt;
     private Instant updatedAt;
     private List<UUID> participantUserIds;
-    private ReadStatusDto readStatusDto;
 
 }

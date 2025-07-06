@@ -11,5 +11,4 @@ import java.util.UUID;
 public class ReadStatusDto {
     private UUID userId;
     private UUID channelId;
-    private Instant readTime;
 }

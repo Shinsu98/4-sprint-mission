@@ -37,9 +37,14 @@ public class FileBinaryContentRepository implements BinaryContentRepository {
         try(FileOutputStream fos = new FileOutputStream(path.toFile());
             ObjectOutputStream oos = new ObjectOutputStream(fos)) {
             oos.writeObject(binaryContent);
+
+            System.out.println("[DEBUG] Saved BinaryContent to: " + path.toAbsolutePath());
+
         } catch (IOException e) {
+            System.err.println("[ERROR] Failed to save BinaryContent: " + e.getMessage());
             throw new RuntimeException(e);
         }
+
         return binaryContent;
     }
 

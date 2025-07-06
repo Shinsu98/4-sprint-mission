@@ -104,6 +104,13 @@ public class FileChannelRepository implements ChannelRepository {
     }
 
     @Override
+    public List<Channel> findAllByType(ChannelType type) {
+        return findAll().stream()
+                .filter(channel -> channel.getType() == type)
+                .toList();
+    }
+
+    @Override
     public boolean existsById(UUID id) {
         Path path = resolvePath(id);
         return Files.exists(path);
