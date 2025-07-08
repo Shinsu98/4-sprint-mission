@@ -28,14 +28,6 @@ public class UserController {
     @ResponseBody
     public ResponseEntity<UserResponseDto> createUser(@ModelAttribute UserCreateDto createDto) {
 
-        UserCreateDto userDto = new UserCreateDto(
-                createDto.getUsername(),
-                createDto.getEmail(),
-                createDto.getPassword(),
-                null,
-                createDto.getProfile()
-        );
-
         BinaryContentCreateDto binaryDto = new BinaryContentCreateDto(
                 null,
                 null,
@@ -43,7 +35,7 @@ public class UserController {
                 createDto.getProfile()
         );
 
-        UserResponseDto response = userService.create(userDto, binaryDto);
+        UserResponseDto response = userService.create(createDto, binaryDto);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
