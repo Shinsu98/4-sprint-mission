@@ -1,5 +1,6 @@
 package com.sprint.mission.discodeit.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 
 import java.io.Serializable;
@@ -17,6 +18,8 @@ public class User implements Serializable {
     private Instant lastLoginAt;
     private String username;
     private String email;
+
+    @JsonIgnore
     private String password;
 
     public User(String username, String email, String password) {

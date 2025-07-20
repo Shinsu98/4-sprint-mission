@@ -1,5 +1,6 @@
 package com.sprint.mission.discodeit.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 
 import java.io.Serializable;
@@ -20,14 +21,20 @@ public class Message implements Serializable {
     private String content;
     private List<UUID> attachmentIds; //BinaryContent Id 리스트
 
-    public Message(UUID id, UUID authorId, UUID channelId, String content, List<UUID> attachmentIds, Instant createdAt, Instant updatedAt) {
+    @JsonIgnore
+    private List<BinaryContent> attachments;
+
+    public Message(UUID id, UUID authorId, UUID channelId, String content, List<BinaryContent> attachments) {
         this.id = id;
         this.authorId = authorId;
         this.channelId = channelId;
         this.content = content;
-        this.attachmentIds = attachmentIds;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+        this.attachments = attachments;
+        this.createdAt = Instant.now();
+    }
+
+    public void loadAttachments(List<BinaryContent> files) {
+        this.attachments = files;
     }
 
     public void update(String newContent) {
@@ -44,6 +51,11 @@ public class Message implements Serializable {
 
     public void updateAttachmentIds(List<UUID> attachmentId) {
         this.attachmentIds = new ArrayList<>(attachmentId);
+        this.updatedAt = Instant.now();
+    }
+
+    public void updateContent(String newContent) {
+        this.content = newContent;
         this.updatedAt = Instant.now();
     }
 }

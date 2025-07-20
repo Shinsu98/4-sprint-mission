@@ -1,8 +1,6 @@
 package com.sprint.mission.discodeit.service.basic;
 
-import com.sprint.mission.discodeit.dto.UserStatusCreateDto;
-import com.sprint.mission.discodeit.dto.UserStatusResponseDto;
-import com.sprint.mission.discodeit.dto.UserStatusUpdateDto;
+import com.sprint.mission.discodeit.dto.UserStatusDto.*;
 import com.sprint.mission.discodeit.entity.UserStatus;
 import com.sprint.mission.discodeit.mapper.UserStatusMapper;
 import com.sprint.mission.discodeit.repository.UserRepository;
@@ -11,6 +9,7 @@ import com.sprint.mission.discodeit.service.UserStatusService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -24,51 +23,65 @@ public class BasicUserStatusService implements UserStatusService {
     private final UserStatusMapper userStatusMapper;
 
     @Override
-    public UserStatusResponseDto create(UserStatusCreateDto dto) {
-        if (!userRepository.existsById(dto.getUserId())) {
-            throw new NoSuchElementException("User not found : " + dto.getUserId());
+    public UserStatusResponse create(UserStatusRequest statusRequest) {
+
+        UUID userId = statusRequest.userId();
+
+        if (!userRepository.existsById(userId)) {
+            throw new NoSuchElementException("User not found : " + statusRequest.userId());
         }
 
         boolean userExists = userStatusRepository.findAll().stream()
-                .anyMatch(userStatus -> userStatus.getUserId().equals(dto.getUserId()));
+                .anyMatch(userStatus -> userStatus.getUserId().equals(statusRequest.userId()));
         if (userExists) {
-            throw new IllegalStateException("User already exists : " + dto.getUserId());
+            throw new IllegalStateException("User already exists : " + statusRequest.userId());
         }
-        UserStatus save = userStatusRepository.save(new UserStatus(dto.getUserId()));
-        return userStatusMapper.entityToDto(save);
+        UserStatus save = userStatusRepository.save(new UserStatus(statusRequest.userId()));
+        return userStatusMapper.toUserStatusResponse(save);
     }
 
     @Override
-    public UserStatusResponseDto find(UUID id) {
+    public UserStatusResponse findById(UUID id) {
         UserStatus userStatus = getUserStatusOrThrow(id);
 
-        return userStatusMapper.entityToDto(userStatus);
+        return userStatusMapper.toUserStatusResponse(userStatus);
     }
 
     @Override
-    public List<UserStatusResponseDto> findAll() {
+    public List<UserStatusResponse> findAll() {
         return userStatusRepository.findAll().stream()
-                .map(userStatusMapper::entityToDto)
+                .map(userStatusMapper::toUserStatusResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
-    public UserStatusResponseDto update(UserStatusUpdateDto dto) {
-        UserStatus userStatus = getUserStatusOrThrow(dto.getId());
-        userStatus.updateLastActiveAt();
+    public UserStatusUpdateResponse update(UUID userId, UserStatusUpdateRequest updateRequest) {
+        UserStatus status = getUserStatusOrThrow(userId);
 
-        return userStatusMapper.entityToDto(userStatusRepository.save(userStatus));
+        // 2. 상태 업데이트
+        if (updateRequest.newLastActiveAt() != null) {
+            status.updateLastActiveAt(updateRequest.newLastActiveAt());
+        }
+
+        userStatusRepository.save(status);
+
+        return userStatusMapper.toUserStatusUpdateResponse(status);
     }
 
     @Override
-    public UserStatusResponseDto updateByUserId(UUID userId) {
+    public UserStatusResponse updateByUserId(UUID userId) {
         UserStatus status = userStatusRepository.findAll().stream()
                 .filter(userStatus -> userStatus.getUserId().equals(userId))
                 .findFirst()
                 .orElseThrow(() -> new NoSuchElementException("UserStatus not found : " + userId));
-        status.updateLastActiveAt();
 
-        return userStatusMapper.entityToDto(userStatusRepository.save(status));
+        // 현재 시간으로 마지막 활동시간 업데이트
+        status.updateLastActiveAt(Instant.now());
+
+        UserStatus updated = userStatusRepository.save(status);
+
+        return userStatusMapper.toUserStatusResponse(updated);
+
     }
 
     @Override

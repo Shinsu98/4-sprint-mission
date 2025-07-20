@@ -1,16 +1,19 @@
 package com.sprint.mission.discodeit.mapper;
 
-import com.sprint.mission.discodeit.dto.ReadStatusResponseDto;
 import com.sprint.mission.discodeit.entity.ReadStatus;
+import com.sprint.mission.discodeit.dto.ReadStatusDto.*;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ReadStatusMapper {
-    public static ReadStatusResponseDto entityToDto(ReadStatus readStatus) {
-        return new ReadStatusResponseDto(
+    public ReadStatusResponse entityToReadStatusResponse(ReadStatus readStatus) {
+        return new ReadStatusResponse(
+                readStatus.getId(),
                 readStatus.getUserId(),
                 readStatus.getChannelId(),
-                readStatus.getReadTime()
+                readStatus.getLastReadAt(),
+                readStatus.getCreatedAt(),
+                readStatus.getUpdatedAt()
         );
     }
 }

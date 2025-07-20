@@ -1,11 +1,8 @@
 package com.sprint.mission.discodeit.service.basic;
 
-import com.sprint.mission.discodeit.dto.*;
-import com.sprint.mission.discodeit.dto.BinaryContentDto.BinaryContentResponseDto;
+import com.sprint.mission.discodeit.dto.MessageDto.*;
 import com.sprint.mission.discodeit.entity.BinaryContent;
-import com.sprint.mission.discodeit.entity.Channel;
 import com.sprint.mission.discodeit.entity.Message;
-import com.sprint.mission.discodeit.entity.User;
 import com.sprint.mission.discodeit.mapper.MessageMapper;
 import com.sprint.mission.discodeit.repository.BinaryContentRepository;
 import com.sprint.mission.discodeit.repository.ChannelRepository;
@@ -22,48 +19,48 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class BasicMessageService implements MessageService {
+
     private final MessageRepository messageRepository;
     private final ChannelRepository channelRepository;
     private final UserRepository userRepository;
     private final BinaryContentRepository binaryContentRepository;
+    private final MessageMapper messageMapper;
 
     @Override
-    public MessageResponseDto create(MessageCreateDto dto) {
-        User user = userRepository.findById(dto.getAuthorId())
+    public MessageResponse create(MessageCreateRequest dto, List<MultipartFile> attachments) {
+        userRepository.findById(dto.authorId())
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        Channel channel = channelRepository.findById(dto.getChannelId())
+        channelRepository.findById(dto.channelId())
                 .orElseThrow(() -> new IllegalArgumentException("Channel not found"));
 
-        Message message = MessageMapper.dtoToEntity(dto, new ArrayList<>());
+        Message message = new Message(
+                UUID.randomUUID(),
+                dto.authorId(),
+                dto.channelId(),
+                dto.content(),
+                new ArrayList<>()
+        );
         messageRepository.save(message);
 
         List<UUID> attachmentIds = new ArrayList<>();
-        List<BinaryContentResponseDto> binaryContents = new ArrayList<>();
 
-        if (dto.getAttachments() != null && !dto.getAttachments().isEmpty()) {
-            for (MultipartFile file : dto.getAttachments()) {
-                try {
-                    BinaryContent content = new BinaryContent(
-                            dto.getAuthorId(),
-                            message.getId(),
-                            file.getBytes(),
-                            file.getOriginalFilename(),
-                            file.getContentType());
-
-                    BinaryContent saved = binaryContentRepository.save(content);
-                    attachmentIds.add(saved.getId());
-
-                    binaryContents.add(new BinaryContentResponseDto(
-                            saved.getId(),
-                            saved.getUserId(),
-                            saved.getMessageId(),
-                            saved.getDatas(),
-                            saved.getFilename(),
-                            saved.getFileType()
-                    ));
-                } catch (IOException e) {
-                    throw new RuntimeException("파일을 업로드 중 오류발생", e);
+        if (attachments != null && !attachments.isEmpty()) {
+            for (MultipartFile file : attachments) {
+                if (file != null && !file.isEmpty()) {
+                    try {
+                        BinaryContent content = new BinaryContent(
+                                dto.authorId(),
+                                message.getId(),
+                                file.getBytes(),
+                                file.getOriginalFilename(),
+                                file.getContentType()
+                        );
+                        BinaryContent saved = binaryContentRepository.save(content);
+                        attachmentIds.add(saved.getId());
+                    } catch (IOException e) {
+                        throw new RuntimeException("파일 업로드 중 오류 발생", e);
+                    }
                 }
             }
         }
@@ -71,58 +68,69 @@ public class BasicMessageService implements MessageService {
         message.updateAttachmentIds(attachmentIds);
         messageRepository.save(message);
 
-        return MessageMapper.entityToDto(message, binaryContents);
+        return messageMapper.toResponse(message);
     }
 
     @Override
-    public List<MessageResponseDto> findAllByChannelId(UUID channelId) {
+    public List<MessageResponse> findAllByChannelId(UUID channelId) {
         List<Message> messages = messageRepository.findAllByChannelId(channelId);
-        List<MessageResponseDto> result = new ArrayList<>();
 
         for (Message message : messages) {
-            List<BinaryContentResponseDto> attachments = new ArrayList<>();
-            for (UUID attachmentId : message.getAttachmentIds()) {
-                binaryContentRepository.findById(attachmentId)
-                        .ifPresent(content ->
-                                attachments.add(new BinaryContentResponseDto(
-                                        content.getId(),
-                                        content.getUserId(),
-                                        content.getMessageId(),
-                                        content.getDatas(),
-                                        content.getFilename(),
-                                        content.getFileType()
-                                ))
-                        );
-            }
+            if (message.getAttachmentIds() != null && !message.getAttachmentIds().isEmpty()) {
+                List<UUID> ids = message.getAttachmentIds();
+                List<BinaryContent> contents = ids.stream()
+                        .map(id -> binaryContentRepository.findById(id).orElse(null))
+                        .filter(Objects::nonNull)
+                        .toList();
 
-            result.add(MessageMapper.entityToDto(message, attachments));
+                message.loadAttachments(contents);
+            }
         }
-        return result;
+
+        return messages.stream()
+                .map(messageMapper::toResponse)
+                .toList();
     }
 
+
     @Override
-    public MessageResponseDto update(UUID messageId, MessageUpdateDto dto) {
+    public MessageResponse update(UUID messageId, MessageUpdateRequestDto dto) {
         Message message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new NoSuchElementException("Message not found : " + messageId));
 
-        message.update(dto.getNewContent());
+        if (dto.newContent() != null && !dto.newContent().isBlank()) {
+            message.updateContent(dto.newContent());
+        }
+
+        MultipartFile newFile = dto.newAttachment();
+        boolean hasNewImage = newFile != null && !newFile.isEmpty();
+
+        if (hasNewImage) {
+            List<UUID> oldAttachmentIds = message.getAttachmentIds();
+            if (oldAttachmentIds != null && !oldAttachmentIds.isEmpty()) {
+                for (UUID fileId : oldAttachmentIds) {
+                    binaryContentRepository.deleteById(fileId);
+                }
+            }
+
+            try {
+                BinaryContent newContent = new BinaryContent(
+                        message.getAuthorId(),
+                        message.getId(),
+                        newFile.getBytes(),
+                        newFile.getOriginalFilename(),
+                        newFile.getContentType()
+                );
+
+                BinaryContent saved = binaryContentRepository.save(newContent);
+                message.updateAttachmentIds(List.of(saved.getId()));
+            } catch (IOException e) {
+                throw new RuntimeException("파일 처리 중 오류 발생", e);
+            }
+        }
+
         messageRepository.save(message);
-
-        List<BinaryContentResponseDto> attachments = message.getAttachmentIds().stream()
-                .map(binaryContentRepository::findById)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(content -> new BinaryContentResponseDto(
-                        content.getId(),
-                        content.getUserId(),
-                        content.getMessageId(),
-                        content.getDatas(),
-                        content.getFilename(),
-                        content.getFileType()
-                ))
-                .toList();
-
-        return MessageMapper.entityToDto(message, attachments);
+        return messageMapper.toResponse(message);
     }
 
     @Override

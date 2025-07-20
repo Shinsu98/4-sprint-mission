@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,17 +30,17 @@ public class FileReadStatusRepository implements ReadStatusRepository {
         }
     }
 
-    private String fileName(UUID userId, UUID channelId) {
-        return userId + "-" + channelId + EXTENSION;
+    private String fileName(UUID readStatusId) {
+        return readStatusId + EXTENSION;
     }
 
-    private Path resolvePath(UUID userId, UUID channelId) {
-        return DIRECTORY.resolve(fileName(userId, channelId));
+    private Path resolvePath(UUID readStatusId) {
+        return DIRECTORY.resolve(fileName(readStatusId));
     }
 
     @Override
     public ReadStatus save(ReadStatus readStatus) {
-        Path path = resolvePath(readStatus.getUserId(), readStatus.getChannelId());
+        Path path = resolvePath(readStatus.getId());
         try (FileOutputStream fos = new FileOutputStream(path.toFile());
              ObjectOutputStream oos = new ObjectOutputStream(fos)) {
             oos.writeObject(readStatus);
@@ -50,25 +51,32 @@ public class FileReadStatusRepository implements ReadStatusRepository {
     }
 
     @Override
-    public Optional<ReadStatus> findByChannelIdAndUserId(UUID channelId, UUID userId) {
-        Path path = resolvePath(userId, channelId);
-        if (!Files.exists(path)) return Optional.empty();
-
-        try (
-                FileInputStream fis = new FileInputStream(path.toFile());
-                ObjectInputStream ois = new ObjectInputStream(fis)
-        ) {
-            return Optional.of((ReadStatus) ois.readObject());
-        } catch (ClassNotFoundException | IOException e) {
-            throw new RuntimeException("Failed to read ReadStatus from file", e);
+    public Optional<ReadStatus> findById(UUID readStatusId) {
+        try {
+            return Files.list(DIRECTORY)
+                    .filter(Files::isRegularFile)
+                    .map(path -> {
+                        try (FileInputStream fis = new FileInputStream(path.toFile());
+                             ObjectInputStream ois = new ObjectInputStream(fis)) {
+                            return (ReadStatus) ois.readObject();
+                        } catch (ClassNotFoundException | IOException e) {
+                            // 무시하고 다음 파일 탐색
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .filter(readStatus -> readStatusId.equals(readStatus.getId()))
+                    .findFirst();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to search ReadStatus by id", e);
         }
     }
 
     @Override
     public List<ReadStatus> findAllByUserId(UUID userId) {
         try {
-            List<ReadStatus> findAllUser = Files.list(DIRECTORY)
-                    .filter(path -> path.getFileName().toString().startsWith(userId.toString() + "-"))
+            List<ReadStatus> list = Files.list(DIRECTORY)
+                    .filter(path -> path.toString().endsWith(".ser"))
                     .map(path -> {
                         try (FileInputStream fis = new FileInputStream(path.toFile());
                              ObjectInputStream ois = new ObjectInputStream(fis)) {
@@ -77,9 +85,10 @@ public class FileReadStatusRepository implements ReadStatusRepository {
                             throw new RuntimeException("Failed to read ReadStatus from file", e);
                         }
                     })
+                    .filter(rs -> rs.getUserId().equals(userId)) // ✅ 이게 핵심!
                     .toList();
 
-            return findAllUser;
+            return list;
         } catch (IOException e) {
             throw new RuntimeException("Failed to read ReadStatus from file", e);
         }
@@ -107,14 +116,14 @@ public class FileReadStatusRepository implements ReadStatusRepository {
     }
 
     @Override
-    public boolean existsById(UUID userId, UUID channelId) {
-        Path path = resolvePath(userId, channelId);
+    public boolean existsById(UUID readStatusId) {
+        Path path = resolvePath(readStatusId);
         return Files.exists(path);
     }
 
     @Override
-    public void deleteByChannelIdAndUserId(UUID channelId, UUID userId) {
-        Path path = resolvePath(userId, channelId);
+    public void deleteById(UUID readStatusId) {
+        Path path = resolvePath(readStatusId);
         try {
             Files.delete(path);
         } catch (IOException e) {

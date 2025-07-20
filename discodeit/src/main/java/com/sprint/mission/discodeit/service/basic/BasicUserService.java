@@ -1,9 +1,8 @@
 package com.sprint.mission.discodeit.service.basic;
 
-import com.sprint.mission.discodeit.dto.BinaryContentDto.BinaryContentCreateDto;
-import com.sprint.mission.discodeit.dto.UserDto.UserCreateDto;
-import com.sprint.mission.discodeit.dto.UserDto.UserResponseDto;
-import com.sprint.mission.discodeit.dto.UserDto.UserUpdateDto;
+import com.sprint.mission.discodeit.dto.UserDto.UserCreateRequest;
+import com.sprint.mission.discodeit.dto.UserDto.*;
+import com.sprint.mission.discodeit.dto.UserDto.UserUpdateRequest;
 import com.sprint.mission.discodeit.entity.BinaryContent;
 import com.sprint.mission.discodeit.entity.User;
 import com.sprint.mission.discodeit.entity.UserStatus;
@@ -33,79 +32,115 @@ public class BasicUserService implements UserService {
     private final UserMapper userMapper;
 
     @Override
-    public UserResponseDto create(UserCreateDto dto, @Nullable BinaryContentCreateDto binaryDto) {
-        userRepository.findByUsername(dto.getUsername())
-                .ifPresent(user -> {
-                    throw new IllegalArgumentException("Username already exists");
-                });
+    public UserResponseDto create(UserCreateRequest request, @Nullable MultipartFile file) {
+        String email = request.email();
+        String username = request.username();
 
-        userRepository.findByEmail(dto.getEmail())
-                .ifPresent(user -> {
-                    throw new IllegalArgumentException("Email already exists");
-                });
+        // 중복 검사
+        if (userRepository.findByUsername(username).isPresent()) {
+            throw new IllegalArgumentException("User with username " + username + " already exists");
+        }
 
-        User user = userMapper.userCreateDtoToUser(dto);
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new IllegalArgumentException("User with email " + email + " already exists");
+        }
 
-        if (binaryDto != null) {
-            MultipartFile file = binaryDto.getFile();
-            if (file != null && !file.isEmpty()) {
-                try {
-                    BinaryContent content = new BinaryContent(user.getId(), null,
-                            dto.getProfile().getBytes(),
-                            dto.getProfile().getOriginalFilename(),
-                            dto.getProfile().getContentType());
-                    binaryContentRepository.save(content);
+        // 사용자 생성
+        User user = new User(username, email, request.password());
+        userRepository.save(user);
 
-                    user.setProfileId(content.getId());     // User에 연결
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to process profile image", e);
-                }
+        // 프로필 이미지 저장
+        if (file != null && !file.isEmpty()) {
+            try {
+                BinaryContent content = new BinaryContent(
+                        user.getId(),
+                        null,
+                        file.getBytes(),
+                        file.getOriginalFilename(),
+                        file.getContentType()
+                );
+                binaryContentRepository.save(content);
+                user.setProfileId(content.getId());
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to store profile image", e);
             }
         }
 
+        UserStatus userStatus = new UserStatus(user.getId());
+        userStatusRepository.save(userStatus);
+
         userRepository.save(user);
 
-        UserStatus status = new UserStatus(user.getId());
-        userStatusRepository.save(status);
-
-        UserStatus userStatus = userStatusRepository.findByUserId(user.getId()).orElse(null);
-        return userMapper.userToUserResponseDto(user, userStatus);
+        // 응답 생성
+        return userMapper.toUserResponse(user);
     }
 
-    @Override
-    public UserResponseDto findById(UUID userId) {
+    /*@Override
+    public UserDto findById(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NoSuchElementException("User with id " + userId + " not found"));
         UserStatus status = userStatusRepository.findByUserId(userId).orElse(null);
-        return userMapper.userToUserResponseDto(user, status);
-    }
+        return userMapper.toUserResponse(user, status);
+    }*/
 
     @Override
-    public List<UserResponseDto> findAll() {
+    public List<AllUserResponseDto> findAll() {
         return userRepository.findAll().stream()
-                .filter(user -> userStatusRepository.findByUserId(user.getId()).isPresent())
                 .map(user -> {
-                    UserStatus userStatus = userStatusRepository.findByUserId(user.getId()).get();
-                    return userMapper.userToUserResponseDto(user, userStatus);
+                    Optional<UserStatus> optionalStatus = userStatusRepository.findByUserId(user.getId());
+                    UserStatus userStatus = optionalStatus.orElse(null); // null이면 offline 처리됨
+                    return userMapper.toAllUserResponesDto(user, userStatus);
                 })
                 .collect(Collectors.toList());
     }
 
     @Override
-    public UserResponseDto update(UserUpdateDto userUpdateDto) {
-        User user = userRepository.findById(userUpdateDto.getUserId())
-                .orElseThrow(() -> new NoSuchElementException("User with id " + userUpdateDto.getUserId() + " not found"));
-        user.update(userUpdateDto.getUsername(), userUpdateDto.getEmail(), userUpdateDto.getPassword());
+    public UserUpdateResponse update(UUID userId, UserUpdateRequest updateDto, @Nullable MultipartFile profile) {
+        // 1. 기존 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User with id " + userId + " not found"));
 
-        if (userUpdateDto.getNewProfile() != null) {
-            BinaryContent newProfile = userMapper.binaryContentDtoToEntity(userUpdateDto.getNewProfile());
-            binaryContentRepository.save(newProfile);
-            user.setProfileId(newProfile.getId());
+        // 2. 중복 검사
+        userRepository.findByUsername(updateDto.newUsername())
+                .filter(u -> !u.getId().equals(userId))
+                .ifPresent(u -> {
+                    throw new IllegalArgumentException("User with username " + updateDto.newUsername() + " already exists");
+                });
+
+        userRepository.findByEmail(updateDto.newEmail())
+                .filter(u -> !u.getId().equals(userId))
+                .ifPresent(u -> {
+                    throw new IllegalArgumentException("User with email " + updateDto.newEmail() + " already exists");
+                });
+
+        // 사용자 정보 수정
+        user.update(updateDto.newUsername(), updateDto.newEmail(), updateDto.newPassword());
+
+        // 프로필 이미지 교체
+        if (profile != null && !profile.isEmpty()) {
+            // 기존 프로필 삭제
+            if (user.getProfileId() != null) {
+                binaryContentRepository.deleteById(user.getProfileId());
+            }
+            // 새 파일 저장
+            try {
+                BinaryContent content = new BinaryContent(
+                        user.getId(),
+                        null,
+                        profile.getBytes(),
+                        profile.getOriginalFilename(),
+                        profile.getContentType()
+                );
+                binaryContentRepository.save(content);
+                user.setProfileId(content.getId());
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to process profile image", e);
+            }
         }
 
         userRepository.save(user);
-        UserStatus userStatus = userStatusRepository.findByUserId(user.getId()).orElse(null);
-        return userMapper.userToUserResponseDto(user, userStatus);
+
+        return userMapper.toUserUpdateResponse(user);
     }
 
     @Override

@@ -3,12 +3,13 @@ package com.sprint.mission.discodeit.repository.jcf;
 import com.sprint.mission.discodeit.entity.ReadStatus;
 import com.sprint.mission.discodeit.repository.ReadStatusRepository;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class JCFReadStatusRepository implements ReadStatusRepository {
     private static final JCFReadStatusRepository instance = new JCFReadStatusRepository();
-    private final Map<UUID, Map<UUID, ReadStatus>> data;
+    private final Map<UUID, ReadStatus> data;
 
     private JCFReadStatusRepository() {
         this.data = new HashMap<>();
@@ -16,63 +17,71 @@ public class JCFReadStatusRepository implements ReadStatusRepository {
 
     @Override
     public ReadStatus save(ReadStatus readStatus) {
-        data.computeIfAbsent(readStatus.getChannelId(), k -> new HashMap<>())
-                .put(readStatus.getUserId(), readStatus);
+        ReadStatus toSave;
 
-        return readStatus;
+        if (readStatus.getId() == null) {
+            // ID가 없으면 새로 생성
+            toSave = new ReadStatus(
+                    UUID.randomUUID(),
+                    readStatus.getUserId(),
+                    readStatus.getChannelId(),
+                    Instant.now()  // 생성 시점 시간
+            );
+        } else {
+            // 기존 ReadStatus 사용
+            toSave = readStatus;
+        }
+
+        // 마지막 읽은 시간 갱신
+        toSave.updateReadTime(Instant.now());
+
+        // Map에 저장
+        data.put(toSave.getId(), toSave);
+
+        return toSave;
     }
 
-    public Optional<ReadStatus> findByChannelIdAndUserId(UUID channelId, UUID userId) {
-        Map<UUID, ReadStatus> userMap = data.get(channelId);
-        if (userMap == null) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(userMap.get(userId));
+    @Override
+    public Optional<ReadStatus> findById(UUID id) {
+        return Optional.ofNullable(data.get(id));
     }
 
     @Override
     public List<ReadStatus> findAllByUserId(UUID userId) {
         return data.values().stream()
-                .map(channelMap -> channelMap.get(userId))
-                .filter(Objects::nonNull)
+                .filter(rs -> rs.getUserId().equals(userId))
                 .collect(Collectors.toList());
     }
 
     @Override
     public List<ReadStatus> findAllByChannelId(UUID channelId) {
-        return new ArrayList<>(
-                Optional.ofNullable(data.get(channelId))
-                        .map(Map::values)
-                        .orElse(Collections.emptyList())
-        );
-
+        return data.values().stream()
+                .filter(rs -> rs.getChannelId().equals(channelId))
+                .collect(Collectors.toList());
     }
 
     @Override
-    public boolean existsById(UUID userId, UUID channelId) {
-        return data.containsKey(userId);
+    public boolean existsById(UUID readStatusId) {
+        return data.values().stream()
+                .anyMatch(rs -> rs.getUserId().equals(readStatusId));
     }
 
     @Override
-    public void deleteByChannelIdAndUserId(UUID channelId, UUID userId) {
-        Optional.ofNullable(data.get(channelId)).ifPresent(map -> {
-            map.remove(userId);
-            if (map.isEmpty()) data.remove(channelId);
-        });
+    public void deleteById(UUID readStatusId) {
+        data.entrySet().removeIf(entry ->
+                entry.getValue().getChannelId().equals(readStatusId));
     }
 
     @Override
     public void deleteByUserId(UUID userId) {
-        for (Map<UUID, ReadStatus> userMap : data.values()) {
-            userMap.remove(userId);
-        }
-        // 비어 있는 채널 제거
-        data.entrySet().removeIf(entry -> entry.getValue().isEmpty());
+        data.entrySet().removeIf(entry ->
+                entry.getValue().getUserId().equals(userId));
     }
 
     @Override
     public void deleteByChannelId(UUID channelId) {
-        data.remove(channelId);
+        data.entrySet().removeIf(entry ->
+                entry.getValue().getChannelId().equals(channelId));
     }
 }
 

@@ -13,22 +13,22 @@ public class BinaryContent implements Serializable {
     private final UUID id; //BinaryContent의 아이디
     private final UUID UserId; //User의 profile 이미지일 경우
     private final UUID messageId; //Message에 첨부된 경우
-    private final byte[] bytes;
-    private final String filename;
-    private final String fileType;
+    private final byte[] size;
+    private final String fileName;
+    private final String contentType;
     private final Instant createdAt;
 
-    public BinaryContent(UUID ownerUserId, UUID messageId, byte[] bytes, String filename, String fileType) {
+    public BinaryContent(UUID ownerUserId, UUID messageId, byte[] size, String fileName, String contentType) {
         this.id = UUID.randomUUID();
         this.createdAt = Instant.now();
         this.UserId = ownerUserId;
         this.messageId = messageId;
-        this.bytes = bytes.clone();
-        this.filename = filename;
-        this.fileType = fileType;
+        this.size = size.clone();
+        this.fileName = fileName;
+        this.contentType = contentType;
     }
 
     public byte[] getDatas() {
-        return bytes.clone();
+        return size.clone();
     }
 }
