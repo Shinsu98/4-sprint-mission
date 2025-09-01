@@ -1,6 +1,6 @@
 spring:
   profiles:
-    active: dev
+    active: prod
   application:
     name: discodeit
   servlet:
@@ -9,15 +9,25 @@ spring:
       maxRequestSize: 30MB  # 한 번에 최대 업로드 가능 용량
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     #        default_batch_fetch_size: 100
+    show-sql: true
     open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
 
 discodeit:
   storage:
-    type: local
+    type: ${STORAGE_TYPE:local}  # local | s3 (기본값: local)
     local:
-      root-path: .discodeit/storage
+      root-path: ${STORAGE_LOCAL_ROOT_PATH:.discodeit/storage}
+    s3:
+      access-key: ${AWS_S3_ACCESS_KEY}
+      secret-key: ${AWS_S3_SECRET_KEY}
+      region: ${AWS_S3_REGION}
+      bucket: ${AWS_S3_BUCKET}
+      presigned-url-expiration: ${AWS_S3_PRESIGNED_URL_EXPIRATION:600} # (기본값: 10분)
 
 management:
   endpoints:
