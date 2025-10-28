@@ -1,67 +1,65 @@
 package com.sprint.mission.discodeit.entity;
 
-import java.lang.reflect.Array;
-import java.nio.channels.Channels;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import com.sprint.mission.discodeit.entity.base.BaseUpdatableEntity;
+import com.sprint.mission.discodeit.entity.status.Role;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
-public class User extends BaseEntity {
-    private String username;
-    private final List<Message> messages;
-    private final List<Channel> channels;
+@Entity
+@Table(name = "users")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)  // JPA를 위한 기본 생성자
+public class User extends BaseUpdatableEntity {
 
-    public User(String name) {
-        super();
-        this.username = name;
+  @Column(length = 50, nullable = false, unique = true)
+  private String username;
+  @Column(length = 100, nullable = false, unique = true)
+  private String email;
+  @Column(length = 60, nullable = false)
+  private String password;
+  @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+  @JoinColumn(name = "profile_id", columnDefinition = "uuid")
+  private BinaryContent profile;
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false)
+  private Role role = Role.USER;
 
-        //추가
-        this.messages = new ArrayList<Message>();
-        this.channels = new ArrayList<Channel>();
+  public User(String username, String email, String password, BinaryContent profile) {
+    this.username = username;
+    this.email = email;
+    this.password = password;
+    this.profile = profile;
+  }
+
+  public void update(String newUsername, String newEmail, String newPassword,
+      BinaryContent newProfile) {
+    if (newUsername != null && !newUsername.equals(this.username)) {
+      this.username = newUsername;
     }
+    if (newEmail != null && !newEmail.equals(this.email)) {
+      this.email = newEmail;
+    }
+    if (newPassword != null && !newPassword.equals(this.password)) {
+      this.password = newPassword;
+    }
+    if (newProfile != null) {
+      this.profile = newProfile;
+    }
+  }
 
-    public String getUsername() {
-        return username;
+  public void updateRole(Role newRole) {
+    if (this.role != newRole) {
+      this.role = newRole;
     }
-
-    public void updateName(String userName){
-        this.username = userName;
-    }
-
-    //유저의 Message 목록에 추가
-    public void addMessage(Message message){
-        if(!messages.contains(message)) {
-            messages.add(message);
-            message.addUser(this);
-        }
-    }
-
-    //유저의 Channel 목록에 추가
-    public void addChannel(Channel channel){
-        if(!channels.contains(channel)) {
-            channels.add(channel);
-            channel.addUser(this);
-        }
-    }
-
-    public void deleteChannel(Channel channel){
-        if(!channels.contains(channel)){
-            channels.remove(channel);
-            channel.deleteUser(this);
-        }
-    }
-
-    public void deleteMessage(Message message){
-        if(!messages.contains(message)) {
-            messages.remove(message);
-            message.deleteUser(this);
-        }
-    }
-    public List<Channel> getChannels(){
-        return channels;
-    }
-
-    public List<Message> getMessages(){
-        return messages;
-    }
+  }
 }

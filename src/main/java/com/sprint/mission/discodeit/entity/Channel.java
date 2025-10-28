@@ -1,63 +1,42 @@
 package com.sprint.mission.discodeit.entity;
-import java.util.ArrayList;
-import java.util.List;
 
-public class Channel extends BaseEntity {
-    private String channel;
-    private final List<Message> messages;
-    private final List<User> users;
+import com.sprint.mission.discodeit.entity.base.BaseUpdatableEntity;
+import com.sprint.mission.discodeit.entity.status.ChannelType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
-    public Channel(String channel) {
-        super();
-        this.channel = channel;
+@Entity
+@Table(name = "channels")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Channel extends BaseUpdatableEntity {
 
-        this.messages = new ArrayList<>();
-        this.users = new ArrayList<>();
-    }
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false)
+  private ChannelType type;
+  @Column(length = 100)
+  private String name;
+  @Column(length = 500)
+  private String description;
 
-    public List<User> getUsers() {
-        return users;
-    }
+  public Channel(ChannelType type, String name, String description) {
+    this.type = type;
+    this.name = name;
+    this.description = description;
+  }
 
-    public String getChannel() {
-        return channel;
+  public void update(String newName, String newDescription) {
+    if (newName != null && !newName.equals(this.name)) {
+      this.name = newName;
     }
-
-    public void updateChannel(String updateChannel){
-        this.channel = updateChannel;
-        updateTimeStamp();
+    if (newDescription != null && !newDescription.equals(this.description)) {
+      this.description = newDescription;
     }
-
-    //추가
-    public void addUser(User user){
-        if(!users.contains(user)) {
-            users.add(user);
-            user.addChannel(this);
-        }
-    }
-    //추가
-    public void addMessage(Message message){
-        if(!messages.contains(message)) {
-            messages.add(message);
-            message.addChannel(this);
-        }
-    }
-    public void deleteMessage(Message message){
-        if(!messages.contains(message)){
-            messages.remove(message);
-            message.deleteChannel(this);
-        }
-    }
-
-    public void deleteUser(User user){
-        if(!users.contains(user)){
-            users.remove(user);
-            user.deleteChannel(this);
-        }
-    }
-
-    //추가
-    public List<Message> getMessages(){
-        return messages;
-    }
+  }
 }
