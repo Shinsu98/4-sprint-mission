@@ -6,20 +6,24 @@ import com.sprint.mission.discodeit.dto.request.UserCreateRequest;
 import com.sprint.mission.discodeit.dto.request.UserUpdateRequest;
 import com.sprint.mission.discodeit.entity.BinaryContent;
 import com.sprint.mission.discodeit.entity.User;
-import com.sprint.mission.discodeit.event.BinaryContentCreatedEvent;
+import com.sprint.mission.discodeit.event.message.BinaryContentCreatedEvent;
+import com.sprint.mission.discodeit.event.message.UserCreatedEvent;
+import com.sprint.mission.discodeit.event.message.UserDeletedEvent;
+import com.sprint.mission.discodeit.event.message.UserUpdatedEvent;
 import com.sprint.mission.discodeit.exception.user.UserAlreadyExistsException;
 import com.sprint.mission.discodeit.exception.user.UserNotFoundException;
 import com.sprint.mission.discodeit.mapper.UserMapper;
 import com.sprint.mission.discodeit.repository.BinaryContentRepository;
 import com.sprint.mission.discodeit.repository.UserRepository;
 import com.sprint.mission.discodeit.service.UserService;
+
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,12 +40,11 @@ public class BasicUserService implements UserService {
   private final UserMapper userMapper;
   private final BinaryContentRepository binaryContentRepository;
   private final PasswordEncoder passwordEncoder;
-
   private final ApplicationEventPublisher eventPublisher;
 
+  @CacheEvict(value = "users", key = "'all'")
   @Transactional
   @Override
-  @CacheEvict(cacheNames = "userList", allEntries = true)
   public UserDto create(UserCreateRequest userCreateRequest,
       Optional<BinaryContentCreateRequest> optionalProfileCreateRequest) {
     log.debug("사용자 생성 시작: {}", userCreateRequest);
@@ -65,19 +68,24 @@ public class BasicUserService implements UserService {
               contentType);
           binaryContentRepository.save(binaryContent);
           eventPublisher.publishEvent(
-                  new BinaryContentCreatedEvent(binaryContent.getId(), bytes, fileName, contentType)
+              new BinaryContentCreatedEvent(
+                  binaryContent, binaryContent.getCreatedAt(), bytes
+              )
           );
-            return binaryContent;
+          return binaryContent;
         })
         .orElse(null);
     String password = userCreateRequest.password();
     String encodedPassword = passwordEncoder.encode(password);
 
     User user = new User(username, email, encodedPassword, nullableProfile);
-
     userRepository.save(user);
-    log.info("사용자 생성 완료: id={}, username={}", user.getId(), username);
-    return userMapper.toDto(user);
+
+      UserDto dto = userMapper.toDto(user);
+      eventPublisher.publishEvent(new UserCreatedEvent(dto, Instant.now()));
+
+      log.info("사용자 생성 완료: id={}, username={}", user.getId(), username);
+    return dto;
   }
 
   @Transactional(readOnly = true)
@@ -91,10 +99,9 @@ public class BasicUserService implements UserService {
     return userDto;
   }
 
+  @Cacheable(value = "users", key = "'all'", unless = "#result.isEmpty()")
   @Transactional(readOnly = true)
   @Override
-  @Cacheable(cacheNames = "userList",
-          unless = "#result == null || #result.isEmpty()")
   public List<UserDto> findAll() {
     log.debug("모든 사용자 조회 시작");
     List<UserDto> userDtos = userRepository.findAllWithProfile()
@@ -105,11 +112,10 @@ public class BasicUserService implements UserService {
     return userDtos;
   }
 
+  @CacheEvict(value = "users", key = "'all'")
   @PreAuthorize("principal.userDto.id == #userId")
   @Transactional
   @Override
-  @CacheEvict(cacheNames = "userList", allEntries = true) // 목록 무효화
-  @CachePut(cacheNames = "userById", key = "#userId")
   public UserDto update(UUID userId, UserUpdateRequest userUpdateRequest,
       Optional<BinaryContentCreateRequest> optionalProfileCreateRequest) {
     log.debug("사용자 수정 시작: id={}, request={}", userId, userUpdateRequest);
@@ -119,6 +125,8 @@ public class BasicUserService implements UserService {
           UserNotFoundException exception = UserNotFoundException.withId(userId);
           return exception;
         });
+
+      UserDto before = userMapper.toDto(user);
 
     String newUsername = userUpdateRequest.newUsername();
     String newEmail = userUpdateRequest.newEmail();
@@ -141,7 +149,9 @@ public class BasicUserService implements UserService {
               contentType);
           binaryContentRepository.save(binaryContent);
           eventPublisher.publishEvent(
-                  new BinaryContentCreatedEvent(binaryContent.getId(), bytes, fileName, contentType)
+              new BinaryContentCreatedEvent(
+                  binaryContent, binaryContent.getCreatedAt(), bytes
+              )
           );
           return binaryContent;
         })
@@ -152,22 +162,29 @@ public class BasicUserService implements UserService {
         .orElse(user.getPassword());
     user.update(newUsername, newEmail, encodedPassword, nullableProfile);
 
+    UserDto after = userMapper.toDto(user);
+
+    eventPublisher.publishEvent(new UserUpdatedEvent(before, after, Instant.now()));
+
     log.info("사용자 수정 완료: id={}", userId);
-    return userMapper.toDto(user);
+    return after;
   }
 
+  @CacheEvict(value = "users", key = "'all'")
   @PreAuthorize("principal.userDto.id == #userId")
   @Transactional
   @Override
-  @CacheEvict(cacheNames = { "userList", "userById" }, allEntries = true)
   public void delete(UUID userId) {
     log.debug("사용자 삭제 시작: id={}", userId);
 
-    if (!userRepository.existsById(userId)) {
-      throw UserNotFoundException.withId(userId);
-    }
+    User user = userRepository.findById(userId)
+            .orElseThrow(() -> UserNotFoundException.withId(userId));
+
+    UserDto dto = userMapper.toDto(user);
 
     userRepository.deleteById(userId);
+
+    eventPublisher.publishEvent(new UserDeletedEvent(dto, Instant.now()));
     log.info("사용자 삭제 완료: id={}", userId);
   }
 }

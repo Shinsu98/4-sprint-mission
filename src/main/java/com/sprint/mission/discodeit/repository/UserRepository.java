@@ -4,8 +4,6 @@ import com.sprint.mission.discodeit.entity.User;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import com.sprint.mission.discodeit.entity.status.Role;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -20,6 +18,4 @@ public interface UserRepository extends JpaRepository<User, UUID> {
   @Query("SELECT u FROM User u "
       + "LEFT JOIN FETCH u.profile")
   List<User> findAllWithProfile();
-
-  List<User> findAllByRole(Role role);
 }

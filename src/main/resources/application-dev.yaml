@@ -11,12 +11,6 @@ spring:
       hibernate:
         format_sql: true
 
-discodeit:
-  admin:
-    username: admin
-    email: admin@example.com
-    password: discodeitadmin1234!
-
 logging:
   level:
     com.sprint.mission.discodeit: debug
